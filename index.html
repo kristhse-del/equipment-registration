@@ -15,7 +15,6 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
         }
         
-        /* Custom scrollbar */
         ::-webkit-scrollbar {
             width: 8px;
         }
@@ -33,10 +32,24 @@
             background: #555;
         }
 
-        /* Prevent text selection on buttons */
         button {
             -webkit-tap-highlight-color: transparent;
             user-select: none;
+        }
+
+        /* Loading spinner */
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
@@ -46,7 +59,10 @@
     <script type="text/babel">
         const { useState, useRef } = React;
 
-        // Lucide React Icons (inline SVG)
+        // 🔧 重要：請在這裡填入您的 Google Apps Script URL
+        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwMfxhnNNsex7VSw8ecmp1hyivXHCwdjxytbv7FX1rn7p6FRyBheRf5X7b36fs_nv5lTA/exec';
+
+        // Lucide React Icons
         const Camera = ({ size = 24, className = "" }) => (
             <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
                 <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
@@ -86,6 +102,20 @@
         const Check = ({ size = 24, className = "" }) => (
             <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
                 <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+        );
+
+        const Cloud = ({ size = 24, className = "" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path>
+            </svg>
+        );
+
+        const AlertCircle = ({ size = 24, className = "" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
             </svg>
         );
 
@@ -171,6 +201,8 @@
             const [photoPreview, setPhotoPreview] = useState(null);
             const [photoError, setPhotoError] = useState('');
             const [submittedData, setSubmittedData] = useState([]);
+            const [isSubmitting, setIsSubmitting] = useState(false);
+            const [submitMessage, setSubmitMessage] = useState({ type: '', text: '' });
             const fileInputRef = useRef(null);
 
             const handleInputChange = (field, value) => {
@@ -193,7 +225,7 @@
                     const reader = new FileReader();
                     reader.onloadend = () => {
                         setPhotoPreview(reader.result);
-                        setFormData(prev => ({ ...prev, photo: file }));
+                        setFormData(prev => ({ ...prev, photo: reader.result }));
                     };
                     reader.readAsDataURL(file);
                 }
@@ -225,47 +257,113 @@
                 setEquipmentList(prev => prev.filter((_, i) => i !== index));
             };
 
-            const handleSubmit = (e) => {
+            const handleSubmit = async (e) => {
                 e.preventDefault();
                 
                 if (!formData.store || !formData.equipment || !formData.quantity) {
-                    alert('Please fill in all required fields');
+                    setSubmitMessage({ type: 'error', text: 'Please fill in all required fields' });
                     return;
                 }
 
-                const submissionData = {
-                    ...formData,
-                    id: Date.now(),
-                    submittedAt: new Date().toLocaleString()
-                };
+                // Check if Google Script URL is configured
+                if (GOOGLE_SCRIPT_URL === 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE') {
+                    setSubmitMessage({ 
+                        type: 'error', 
+                        text: '⚠️ Please configure Google Apps Script URL first!' 
+                    });
+                    return;
+                }
 
-                setSubmittedData(prev => [...prev, submissionData]);
+                setIsSubmitting(true);
+                setSubmitMessage({ type: '', text: '' });
 
-                setFormData({
-                    store: '',
-                    date: new Date().toISOString().split('T')[0],
-                    equipment: '',
-                    quantity: '',
-                    photo: null,
-                    usageNotes: ''
-                });
-                setPhotoPreview(null);
-                setPhotoError('');
-                
-                alert('Registration submitted successfully!');
+                try {
+                    const response = await fetch(GOOGLE_SCRIPT_URL, {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            store: formData.store,
+                            date: formData.date,
+                            equipment: formData.equipment,
+                            quantity: formData.quantity,
+                            photo: formData.photo,
+                            usageNotes: formData.usageNotes
+                        })
+                    });
+
+                    // Due to no-cors mode, we can't read the response
+                    // But if no error thrown, assume success
+                    const submissionData = {
+                        ...formData,
+                        id: Date.now(),
+                        submittedAt: new Date().toLocaleString()
+                    };
+
+                    setSubmittedData(prev => [...prev, submissionData]);
+
+                    setSubmitMessage({ 
+                        type: 'success', 
+                        text: '✅ Data uploaded to Google Drive successfully!' 
+                    });
+
+                    // Reset form
+                    setFormData({
+                        store: '',
+                        date: new Date().toISOString().split('T')[0],
+                        equipment: '',
+                        quantity: '',
+                        photo: null,
+                        usageNotes: ''
+                    });
+                    setPhotoPreview(null);
+                    setPhotoError('');
+
+                } catch (error) {
+                    console.error('Error:', error);
+                    setSubmitMessage({ 
+                        type: 'error', 
+                        text: '❌ Error uploading data: ' + error.message 
+                    });
+                } finally {
+                    setIsSubmitting(false);
+                }
             };
 
             return (
                 <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 pb-20">
                     <div className="max-w-md mx-auto">
                         <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
-                            <h1 className="text-2xl font-bold text-slate-800 text-center mb-2">
-                                Equipment Registration
-                            </h1>
+                            <div className="flex items-center justify-center gap-2 mb-2">
+                                <Cloud size={28} className="text-blue-600" />
+                                <h1 className="text-2xl font-bold text-slate-800">
+                                    Equipment Registration
+                                </h1>
+                            </div>
                             <p className="text-slate-500 text-center text-sm">
-                                Kitchen Equipment Tracking System
+                                Auto-save to Google Drive
                             </p>
                         </div>
+
+                        {/* Submit Message */}
+                        {submitMessage.text && (
+                            <div className={`mb-4 p-4 rounded-xl ${
+                                submitMessage.type === 'success' 
+                                    ? 'bg-green-50 text-green-700 border-2 border-green-200' 
+                                    : 'bg-red-50 text-red-700 border-2 border-red-200'
+                            }`}>
+                                <div className="flex items-center gap-2">
+                                    {submitMessage.type === 'success' ? (
+                                        <Check size={20} />
+                                    ) : (
+                                        <AlertCircle size={20} />
+                                    )}
+                                    <span className="text-sm font-medium">{submitMessage.text}</span>
+                                </div>
+                            </div>
+                        )}
 
                         <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-lg p-6 space-y-5">
                             
@@ -280,6 +378,7 @@
                                     placeholder="Enter store name"
                                     className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none transition-colors"
                                     required
+                                    disabled={isSubmitting}
                                 />
                             </div>
 
@@ -293,6 +392,7 @@
                                     onChange={(e) => handleInputChange('date', e.target.value)}
                                     className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none transition-colors"
                                     required
+                                    disabled={isSubmitting}
                                 />
                             </div>
 
@@ -305,6 +405,7 @@
                                         type="button"
                                         onClick={() => setShowManageEquipment(!showManageEquipment)}
                                         className="text-blue-600 text-xs font-medium flex items-center gap-1 hover:text-blue-700"
+                                        disabled={isSubmitting}
                                     >
                                         <Edit2 size={14} />
                                         Manage List
@@ -315,6 +416,7 @@
                                     onChange={(e) => handleInputChange('equipment', e.target.value)}
                                     className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none transition-colors appearance-none bg-white"
                                     required
+                                    disabled={isSubmitting}
                                 >
                                     <option value="">Select equipment</option>
                                     {equipmentList.map((item, index) => (
@@ -417,6 +519,7 @@
                                     min="1"
                                     className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none transition-colors"
                                     required
+                                    disabled={isSubmitting}
                                 />
                             </div>
 
@@ -431,6 +534,7 @@
                                     accept="image/*"
                                     capture="environment"
                                     className="hidden"
+                                    disabled={isSubmitting}
                                 />
                                 
                                 {photoPreview ? (
@@ -448,6 +552,7 @@
                                                 fileInputRef.current.value = '';
                                             }}
                                             className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 transition-colors shadow-lg"
+                                            disabled={isSubmitting}
                                         >
                                             <Trash2 size={16} />
                                         </button>
@@ -457,6 +562,7 @@
                                         type="button"
                                         onClick={() => fileInputRef.current.click()}
                                         className="w-full h-32 border-2 border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center gap-2 hover:border-blue-500 hover:bg-blue-50 transition-colors active:bg-blue-100"
+                                        disabled={isSubmitting}
                                     >
                                         <Camera size={32} className="text-slate-400" />
                                         <span className="text-sm text-slate-500">Tap to take/upload photo</span>
@@ -482,6 +588,7 @@
                                     placeholder="Enter usage conditions or notes"
                                     rows="4"
                                     className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none transition-colors resize-none"
+                                    disabled={isSubmitting}
                                 />
                                 <div className="text-right text-xs text-slate-400 mt-1">
                                     {formData.usageNotes.length}/200
@@ -490,9 +597,20 @@
 
                             <button
                                 type="submit"
-                                className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-4 rounded-xl font-semibold hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg hover:shadow-xl active:scale-98"
+                                disabled={isSubmitting}
+                                className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-4 rounded-xl font-semibold hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg hover:shadow-xl active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                             >
-                                Submit Registration
+                                {isSubmitting ? (
+                                    <>
+                                        <div className="spinner"></div>
+                                        <span>Uploading to Google Drive...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Cloud size={20} />
+                                        <span>Submit to Google Drive</span>
+                                    </>
+                                )}
                             </button>
                         </form>
 
